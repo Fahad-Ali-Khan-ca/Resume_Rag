@@ -1,0 +1,18 @@
+# Virtual environment (regenerated from pyproject.toml + uv.lock)
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local model cache / data (never commit weights)
+.cache/
+models/
+*.gguf
+
+# Loose screenshots
+image*.png
+
+# OS noise
+Thumbs.db
+.DS_Store

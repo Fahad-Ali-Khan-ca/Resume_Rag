@@ -11,9 +11,6 @@ One interface (`LLM`), two pluggable backends:
   * "transformers" - Hugging Face + PyTorch. Purest Python, any HF model id.
   * "llamacpp"     - llama-cpp-python (GGUF). Quantized, runs on modest hardware.
 
-Install only what you need:
-  uv add transformers torch accelerate huggingface_hub     # transformers backend
-  uv add llama-cpp-python huggingface_hub                   # llamacpp backend
 
 Run:
   python local_llm.py gemma-2b
@@ -71,8 +68,10 @@ def _merge_system_into_user(messages: list[Message]) -> list[Message]:
     sys = " ".join(m["content"] for m in messages if m["role"] == "system").strip()
     rest = [m for m in messages if m["role"] != "system"]
     if sys and rest and rest[0]["role"] == "user":
+        print(f"sys : {sys} and rest : {rest}")
         return [{"role": "user", "content": f"{sys}\n\n{rest[0]['content']}"}, *rest[1:]]
     if sys:
+        print(f"sys : {sys}")
         return [{"role": "user", "content": sys}, *rest]
     return rest
 
@@ -89,6 +88,7 @@ class TransformersLLM(LLM):
         self.name = model_id
         self._torch = torch
         self.device = device or self._pick_device(torch)
+        print(f"transformers backend: device={self.device}, dtype={dtype or 'default'}")
         torch_dtype = self._pick_dtype(torch, self.device, dtype)
 
         self.tok = AutoTokenizer.from_pretrained(model_id)
@@ -233,7 +233,7 @@ if __name__ == "__main__":
 
     model_name = sys.argv[1] if len(sys.argv) > 1 else "gemma-2b"
     prompt = sys.argv[2] if len(sys.argv) > 2 else \
-        "In one sentence, what is retrieval-augmented generation?"
+        "Why are people sad? Explain in one sentence."
 
     print(f"loading: {model_name}")
     llm = load(model_name)
