@@ -16,3 +16,7 @@ image*.png
 # OS noise
 Thumbs.db
 .DS_Store
+
+# RAG System Data & Outputs
+chroma_db/
+final_resume.md

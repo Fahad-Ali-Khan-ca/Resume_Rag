@@ -1,0 +1,13 @@
+Title: AI Engineer
+
+We are looking for an AI Engineer to join our team.
+
+Responsibilities:
+- Build and optimize Retrieval-Augmented Generation (RAG) pipelines.
+- Deploy models using Docker.
+- Work heavily in Python.
+- (Bonus) Experience with Rust or C++.
+
+Requirements:
+- 3+ years of Python experience.
+- Experience with Vector Databases (ChromaDB, Pinecone, etc.)
