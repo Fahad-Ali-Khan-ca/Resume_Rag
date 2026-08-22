@@ -69,22 +69,26 @@ def parse_text_file(file_path: Path, source_type: str) -> list[ParsedDocument]:
 
 
 def clean_text(text: str) -> str:
-    """
-    Basic text normalization.
-
-    Keep this conservative.
-    We don't want to accidentally destroy useful information.
-    """
     lines = []
 
+    previous_blank = False
+
     for line in text.splitlines():
+
         line = line.strip()
 
-        if line:
-            lines.append(line)
+        if not line:
 
-    return "\n".join(lines)
+            if not previous_blank:
+                lines.append("")
 
+            previous_blank = True
+            continue
+
+        lines.append(line)
+        previous_blank = False
+
+    return "\n".join(lines).strip()
 
 def parse_file(file_path: Path) -> list[ParsedDocument]:
     """
