@@ -4,7 +4,7 @@ import json
 
 from pydantic import BaseModel
 
-from llm import LLM, GenConfig
+from local_llm import LLM, GenConfig
 
 from generation.planner import (
     PlannedBullet,

@@ -5,7 +5,7 @@ import json
 
 from pydantic import ValidationError
 
-from llm import LLM, GenConfig
+from local_llm import LLM, GenConfig
 
 from jd.schemas import (
     JobDescriptionAnalysis,

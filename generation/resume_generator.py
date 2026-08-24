@@ -8,7 +8,7 @@ from pydantic import (
     Field,
 )
 
-from llm import LLM
+from local_llm import LLM
 
 from jd.schemas import (
     JobDescriptionAnalysis,

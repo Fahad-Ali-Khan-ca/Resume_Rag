@@ -9,7 +9,7 @@ from pydantic import (
     Field,
 )
 
-from llm import LLM, GenConfig
+from local_llm import LLM, GenConfig
 
 from jd.schemas import (
     JobDescriptionAnalysis,
