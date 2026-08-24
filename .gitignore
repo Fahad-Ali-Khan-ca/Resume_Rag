@@ -17,3 +17,7 @@ image*.png
 Thumbs.db
 .DS_Store
 *.code-workspace
+
+# Corpus removed till testing
+/corpus/raw
+/corpus/processed
