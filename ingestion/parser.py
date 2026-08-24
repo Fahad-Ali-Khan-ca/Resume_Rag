@@ -7,8 +7,8 @@ from pathlib import Path
 from pypdf import PdfReader
 
 
-RAW_DIR = Path("corpus/raw")
-OUTPUT_FILE = Path("corpus/processed/documents.jsonl")
+RAW_DIR = Path("../corpus/raw") # Corpus is limited to PDF, Markdown, and TXT files.
+OUTPUT_FILE = Path("../corpus/processed/documents.jsonl")
 
 
 @dataclass

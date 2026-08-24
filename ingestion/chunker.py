@@ -6,8 +6,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-INPUT_FILE = Path("corpus/processed/documents.jsonl")
-OUTPUT_FILE = Path("corpus/processed/chunks.jsonl")
+INPUT_FILE = Path("../corpus/processed/documents.jsonl")
+OUTPUT_FILE = Path("../corpus/processed/chunks.jsonl")
 
 MAX_CHUNK_CHARS = 1200
 MIN_CHUNK_CHARS = 200
