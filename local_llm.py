@@ -243,7 +243,7 @@ class Spec:
 REGISTRY: dict[str, Spec] = {
     # transformers (full precision; needs the RAM; great on GPU / Apple Silicon)
     "gemma-2b": Spec(
-        "transformers", {"model_id": "google/gemma-2-2b-it"}
+        "transformers", {"model_id": "google/gemma-2-2b-it", "dtype" : "bfloat16"}
     ),
     "gemma-9b": Spec("transformers", {"model_id": "google/gemma-2-9b-it"}),
     "gemma-4-31b": Spec("transformers", {"model_id": "google/gemma-4-31B-it"}),

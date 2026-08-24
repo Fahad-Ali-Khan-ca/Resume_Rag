@@ -4,10 +4,10 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from config import   CHUNKS_FILE, DOCUMENTS_FILE, EVIDENCE_FILE
 
-
-INPUT_FILE = Path("../corpus/processed/documents.jsonl")
-OUTPUT_FILE = Path("../corpus/processed/chunks.jsonl")
+INPUT_FILE = DOCUMENTS_FILE
+OUTPUT_FILE = CHUNKS_FILE
 
 MAX_CHUNK_CHARS = 1200
 MIN_CHUNK_CHARS = 200

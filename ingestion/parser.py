@@ -5,11 +5,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from pypdf import PdfReader
+from config import RAW_DIR, DOCUMENTS_FILE
 
+# PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-RAW_DIR = Path("../corpus/raw") # Corpus is limited to PDF, Markdown, and TXT files.
-OUTPUT_FILE = Path("../corpus/processed/documents.jsonl")
+# RAW_DIR = PROJECT_ROOT / "corpus" / "raw"  # Corpus is limited to PDF, Markdown, and TXT files.
+# OUTPUT_FILE = PROJECT_ROOT / "corpus" / "processed" / "documents.jsonl"
 
+OUTPUT_FILE = DOCUMENTS_FILE
 
 @dataclass
 class ParsedDocument:

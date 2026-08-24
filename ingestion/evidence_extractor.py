@@ -7,16 +7,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from llm import LLM, GenConfig
+from local_llm import LLM, GenConfig
+from config import CHUNKS_FILE, EVIDENCE_FILE, STATE_FILE
 
 
 # --------------------------------------------------------------------------- #
 # Paths
 # --------------------------------------------------------------------------- #
 
-CHUNKS_FILE = Path("corpus/processed/chunks.jsonl")
-EVIDENCE_FILE = Path("corpus/processed/evidence.jsonl")
-STATE_FILE = Path("corpus/processed/evidence_state.json")
+# CHUNKS_FILE = Path("../corpus/processed/chunks.jsonl")
+# EVIDENCE_FILE = Path("../corpus/processed/evidence.jsonl")
+# STATE_FILE = Path("../corpus/processed/evidence_state.json")
 
 
 # --------------------------------------------------------------------------- #
@@ -117,6 +118,9 @@ STRICT RULES:
 8. If the source contains no useful career evidence, return an empty list.
 9. Do not extract vague filler statements.
 10. Return valid JSON only.
+11. Extract at most 8 high-value evidence items from each chunk.
+12. Prefer concrete resume-relevant evidence over trivial biographical facts.
+13. Do not infer current status. For example, a completed degree does not imply the person is currently a student.
 
 The required output format is:
 
@@ -358,7 +362,7 @@ def extract_facts(
     ]
 
     config = GenConfig(
-        max_new_tokens=1000,
+        max_new_tokens=512,
         temperature=0.0,
         top_p=1.0,
     )
@@ -514,7 +518,7 @@ def extract_corpus(
     print()
 
     for number, chunk in enumerate(
-        chunks,
+        chunks[:1],
         start=1,
     ):
 
@@ -636,3 +640,10 @@ def extract_corpus(
     print(f"Failed:                {failed}")
     print(f"Evidence cards:        {total_evidence}")
     print(f"Output:                {evidence_file}")
+    
+
+if __name__ == "__main__":
+    from local_llm import load
+
+    llm = load("gemma-2b")
+    extract_corpus(llm)

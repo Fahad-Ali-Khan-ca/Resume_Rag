@@ -1,0 +1,56 @@
+
+Job Description:
+
+The Data Engineer is part of the CPB Data Product Family Team within Data as a Service. This role is responsible for working with internal and external technology partners to design and develop advanced data pipe line solutions to  provide support to Analytic Developers. We are looking for an energetic data engineer, who can drive Data Projects into completion.   
+
+Skillset required:
+
+Minimum 5 years of Data warehousing experience with at least 2 years on MS Azure Data Lake Ingestion and Curation processes.
+
+Azure skills is required, including provisioning, Configuring, and Developing solutions in Azure Data Bricks, Azure Data Factory, Python.
+
+Nice to have hands-on experience using MS SQL Server or similar RDBMS platform. Continuous Integration and Continuous Development where Code Deployment using DevOps tools (Git Hub, Jenkins, Azure Pipelines).
+
+Familiarity with data visualization tools (e.g., PowerBI, Tableau etc.)
+
+ 
+Here's some of what you may be asked to perform:
+ 
+
+Lead proof-of-concept solutions and prototyping for new patterns based on defined requirements and overseeing solution implementation
+
+Help improve data management processes - acquiring, transforming and storing massive volumes of structured and unstructured data
+
+Ensure compliance with internal and external data privacy standards and regulation.
+
+Lead developing new solutions for batch and real-time data and analytics use cases
+
+Ensure ETL pipelines are produced with the highest quality standards, metadata and validated for completeness and accuracy
+
+Coordinate stakeholders and business partners to ensure successful design and development
+
+Data preparation and transformation using MS Azure Tools
+
+Develop automation and monitoring of services in Analytics platform
+
+Manage project workload and ensure the development standards are respected
+
+Update assigned tasks in sprint management system (JIRA) and provide updates in line with agile methodologies.
+
+Provide on-going communications on project status and systems restrictions.
+
+Oversee code review and ensure high quality work to maintain standards within own area of responsibility
+
+Participate in project committees as necessary to provide guidance and support on Enterprise Data & Analytics technology and act as a key contact for specific business processes, projects or procedures
+
+Provide L3 Production Support as developer of the solution 
+
+EXPERIENCE AND / OR EDUCATION
+
+Degree, Postgraduate Degree, or Technical Certificate in Data Management or related discipline (e.g. Computer Science, Engineering), or equivalent practical experience
+
+2-3 years of relevant experience
+
+Who We Are:
+
+TD is one of the world's leading global financial institutions and is the fifth largest bank in North America by branches/stores. Every day, we strive to make every interaction, product, and experience remarkably human and refreshingly simple for over 27 million households and businesses in Canada, the United States and around the world. More than 95,000 TD colleagues bring their skills, talent, and creativity to foster deeper relationships, ensure disciplined execution, and build a simpler, faster banking experience. TD is deeply committed to being a leader in client experience, that is why we believe that all colleagues, no matter where they work, are client facing. Together, we are reimagining what banking can be for our clients, colleagues and communities.
