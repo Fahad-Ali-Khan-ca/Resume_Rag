@@ -709,12 +709,13 @@ def extract_facts(
                     {
                         "role": "user",
                         "content": (
-                            "Your previous response was invalid. "
-                            "Return the same extraction as valid JSON "
-                            "matching the required schema. "
-                            "Do not add or remove factual claims while "
-                            "repairing the structure. "
-                            "Return JSON only."
+                            "Your previous JSON response is syntactically invalid.\n\n"
+                            f"JSON parser error:\n{error}\n\n"
+                            "Repair ONLY the JSON syntax.\n"
+                            "Do not add, remove, rewrite, or reinterpret any factual claims.\n"
+                            "Preserve the same evidence items, skills, metrics, and values.\n"
+                            "Ensure all commas, brackets, braces, strings, and arrays are valid.\n"
+                            "Return the complete corrected JSON object only."
                         ),
                     },
                 ]
