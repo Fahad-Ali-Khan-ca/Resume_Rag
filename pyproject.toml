@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "RAG system for generating ATS-friendly resumes."
 readme = "README.md"
 requires-python = ">=3.10"
+
 dependencies = [
     "accelerate>=1.14.0",
     "huggingface-hub>=1.21.0",
@@ -11,21 +12,65 @@ dependencies = [
     "pydantic>=2.13.4",
     "pypdf>=6.16.2",
     "sentence-transformers>=6.0.0",
+    "transformers>=5.12.1",
+]
+
+[project.optional-dependencies]
+
+nvidia = [
     "torch==2.11.0",
     "torchvision==0.26.0",
     "torchaudio==2.11.0",
-    "transformers>=5.12.1",
+]
+
+amd = [
+    "torch[device-gfx1200]==2.12.0+rocm7.14.0",
+    "torchvision[device-gfx1200]==0.27.0+rocm7.14.0",
+    "torchaudio==2.11.0+rocm7.14.0",
+    "rocm[libraries,device-gfx1200]==7.14.0",
 ]
 
 [tool.uv]
 package = false
+index-strategy = "unsafe-best-match"
+
+exclude-dependencies = [
+    "triton",
+]
+
+conflicts = [
+    [
+        { extra = "nvidia" },
+        { extra = "amd" },
+    ],
+]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
-torchaudio = { index = "pytorch-cu128" }
+
+torch = [
+    { index = "pytorch-cu128", extra = "nvidia" },
+    { index = "amd-rocm", extra = "amd" },
+]
+
+torchvision = [
+    { index = "pytorch-cu128", extra = "nvidia" },
+    { index = "amd-rocm", extra = "amd" },
+]
+
+torchaudio = [
+    { index = "pytorch-cu128", extra = "nvidia" },
+    { index = "amd-rocm", extra = "amd" },
+]
+
+rocm = [
+    { index = "amd-rocm", extra = "amd" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[[tool.uv.index]]
+name = "amd-rocm"
+url = "https://repo.amd.com/rocm/whl-multi-arch/"
