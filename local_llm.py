@@ -562,6 +562,110 @@ class TransformersLLM(LLM):
 
         thread.join()
 
+class Gemma4LLM(LLM):
+    def __init__(
+        self,
+        model_id: str,
+        *,
+        device: str | None = None,
+        dtype: str | None = None,
+    ):
+        import torch
+        from transformers import (
+            AutoProcessor,
+            AutoModelForMultimodalLM,
+        )
+
+        self.name = model_id
+        self._torch = torch
+
+        self.device = device or (
+            "cuda"
+            if torch.cuda.is_available()
+            else "cpu"
+        )
+
+        if dtype:
+            torch_dtype = getattr(torch, dtype)
+
+        elif self.device == "cuda":
+            if torch.cuda.is_bf16_supported():
+                torch_dtype = torch.bfloat16
+            else:
+                torch_dtype = torch.float16
+
+        else:
+            torch_dtype = torch.float32
+
+        print(
+            f"gemma4 backend: "
+            f"device={self.device}, "
+            f"dtype={torch_dtype}"
+        )
+
+        self.processor = AutoProcessor.from_pretrained(
+            model_id
+        )
+
+        self.model = (
+            AutoModelForMultimodalLM.from_pretrained(
+                model_id,
+                dtype=torch_dtype,
+                device_map="auto",
+            )
+        )
+
+        self.model.eval()
+
+    def generate(
+        self,
+        messages: list[Message],
+        config: GenConfig | None = None,
+    ) -> str:
+
+        cfg = config or GenConfig()
+
+        inputs = self.processor.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+        )
+
+        inputs = inputs.to(
+            self.model.device
+        )
+
+        with self._torch.inference_mode():
+
+            output = self.model.generate(
+                **inputs,
+                max_new_tokens=cfg.max_new_tokens,
+                do_sample=cfg.do_sample,
+                temperature=(
+                    cfg.temperature
+                    if cfg.do_sample
+                    else None
+                ),
+                top_p=(
+                    cfg.top_p
+                    if cfg.do_sample
+                    else None
+                ),
+            )
+
+        prompt_length = inputs["input_ids"].shape[1]
+
+        generated = output[
+            0,
+            prompt_length:
+        ]
+
+        return self.processor.decode(
+            generated,
+            skip_special_tokens=True,
+        ).strip()
 
 # --------------------------------------------------------------------------- #
 # Backend 2: llama-cpp-python (GGUF)
@@ -684,33 +788,26 @@ class Spec:
         default_factory=dict,
     )
 
-
 REGISTRY: dict[str, Spec] = {
-    # Transformers
+
+    # ------------------------------------------------------------------ #
+    # Transformers - Gemma 2 / Qwen
+    # ------------------------------------------------------------------ #
+
     "gemma-2b": Spec(
         "transformers",
         {
             "model_id": "google/gemma-2-2b-it",
         },
     ),
+
     "gemma-9b": Spec(
         "transformers",
         {
             "model_id": "google/gemma-2-9b-it",
         },
     ),
-    "gemma-4-31b": Spec(
-        "transformers",
-        {
-            "model_id": "google/gemma-4-31B-it",
-        },
-    ),
-    "gemma-4e": Spec(
-        "transformers",
-        {
-            "model_id": "google/gemma-4-E4B-it",
-        },
-    ),
+
     "qwen-7b": Spec(
         "transformers",
         {
@@ -718,7 +815,49 @@ REGISTRY: dict[str, Spec] = {
         },
     ),
 
+    # ------------------------------------------------------------------ #
+    # Gemma 4
+    # ------------------------------------------------------------------ #
+
+    "gemma-4-e2b": Spec(
+        "gemma4",
+        {
+            "model_id": "google/gemma-4-E2B-it",
+        },
+    ),
+
+    "gemma-4-e4b": Spec(
+        "gemma4",
+        {
+            "model_id": "google/gemma-4-E4B-it",
+        },
+    ),
+
+    "gemma-4-12b": Spec(
+        "gemma4",
+        {
+            "model_id": "google/gemma-4-12B-it",
+        },
+    ),
+
+    "gemma-4-26b-a4b": Spec(
+        "gemma4",
+        {
+            "model_id": "google/gemma-4-26B-A4B-it",
+        },
+    ),
+
+    "gemma-4-31b": Spec(
+        "gemma4",
+        {
+            "model_id": "google/gemma-4-31B-it",
+        },
+    ),
+
+    # ------------------------------------------------------------------ #
     # llama.cpp / GGUF
+    # ------------------------------------------------------------------ #
+
     "gemma-9b-q4": Spec(
         "llamacpp",
         {
@@ -726,6 +865,7 @@ REGISTRY: dict[str, Spec] = {
             "filename": "*Q4_K_M.gguf",
         },
     ),
+
     "qwen-14b-q4": Spec(
         "llamacpp",
         {
@@ -734,11 +874,11 @@ REGISTRY: dict[str, Spec] = {
         },
     ),
 }
-
-
 _BACKENDS = {
     "transformers": TransformersLLM,
     "llamacpp": LlamaCppLLM,
+    "gemma4": Gemma4LLM,
+
 }
 
 
