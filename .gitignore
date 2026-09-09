@@ -21,3 +21,4 @@ Thumbs.db
 # Corpus removed till testing
 /corpus/raw
 /corpus/processed
+/resume-rag-mvp

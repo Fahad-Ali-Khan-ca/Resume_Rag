@@ -706,7 +706,7 @@ class LlamaCppLLM(LLM):
         common = {
             "n_ctx": n_ctx,
             "n_gpu_layers": n_gpu_layers,
-            "verbose": False,
+            "verbose": True,
         }
 
         if model_path:
@@ -873,6 +873,17 @@ REGISTRY: dict[str, Spec] = {
             "filename": "*Q4_K_M.gguf",
         },
     ),
+
+    "gemma-2b-q4": Spec(
+        "llamacpp",
+        {
+            "repo_id": "bartowski/gemma-2-2b-it-GGUF",
+            "filename": "*Q4_K_M.gguf",
+            "n_ctx": 4096,
+            "n_gpu_layers": -1,
+        },
+    ),
+
 }
 _BACKENDS = {
     "transformers": TransformersLLM,
