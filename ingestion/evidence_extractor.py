@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from config import CHUNKS_FILE, EVIDENCE_FILE, STATE_FILE
 from local_llm import GenConfig, LLM
@@ -73,7 +73,59 @@ class ExtractedFact(BaseModel):
     metrics: list[ExtractedMetric] = Field(
         default_factory=list,
     )
+    @field_validator(
+           "metrics",
+           mode="before",
+       )
+    
+    @classmethod
+    def discard_incomplete_metrics(
+        cls,
+        metrics,
+    ):
+        """
+        Drop metric objects that contain no usable name or value.
 
+        An incomplete metric is safer to discard than to invent
+        a replacement value or reject an otherwise valid fact.
+        """
+
+        if metrics is None:
+            return []
+
+        if not isinstance(metrics, list):
+            return metrics
+
+        cleaned = []
+
+        for metric in metrics:
+            if not isinstance(metric, dict):
+                # Leave unexpected structures intact so Pydantic
+                # can reject them normally.
+                cleaned.append(metric)
+                continue
+
+            name = metric.get("name")
+            value = metric.get("value")
+
+            if name is None or value is None:
+                continue
+
+            if (
+                isinstance(name, str)
+                and not name.strip()
+            ):
+                continue
+
+            if (
+                isinstance(value, str)
+                and not value.strip()
+            ):
+                continue
+
+            cleaned.append(metric)
+
+        return cleaned
 
 class ExtractionResponse(BaseModel):
     evidence: list[ExtractedFact] = Field(
@@ -135,6 +187,10 @@ STRICT RULES:
 16. Do not convert a listed skill into "proficient", "expert", "experienced",
     or similar stronger wording unless the source explicitly supports that
     wording.
+17. Metrics are optional. If an evidence item has no explicit measurable
+    result or quantitative value, return "metrics": [].
+18. Never return null or empty strings for a metric name or value.
+19. Skills, technologies, job titles, and descriptive text are not metrics.
 
 The required output format is:
 
@@ -698,6 +754,52 @@ def extract_facts(
                 f"  Invalid model output "
                 f"(attempt {attempt + 1}/{retries + 1}): "
                 f"{error}"
+            )
+
+            if isinstance(
+                error,
+                ValidationError,
+            ):
+                repair_prompt = (
+                    "Your previous response is valid JSON, but it does not "
+                    "match the required extraction schema.\n\n"
+                    f"Schema validation error:\n{error}\n\n"
+                    "Repair ONLY the schema/type problems.\n"
+                    "Do not invent or add factual information.\n"
+                    "Do not invent replacement metric values.\n"
+                    "Every metric must have a non-empty string name and value.\n"
+                    "If a metric has a null, missing, or empty name/value, "
+                    "remove that metric object.\n"
+                    "If an evidence item has no valid metrics, use "
+                    "\"metrics\": [].\n"
+                    "Preserve factual claims and supported skills unless "
+                    "they themselves violate the schema.\n"
+                    "Return the complete corrected JSON object only."
+                )
+
+            else:
+                repair_prompt = (
+                    "Your previous response is not valid JSON.\n\n"
+                    f"JSON parsing error:\n{error}\n\n"
+                    "Repair ONLY the JSON syntax.\n"
+                    "Do not add, remove, rewrite, or reinterpret factual claims.\n"
+                    "Preserve the same evidence items, skills, metrics, and values.\n"
+                    "Ensure commas, brackets, braces, strings, and arrays "
+                    "are valid.\n"
+                    "Return the complete corrected JSON object only."
+                )
+
+            messages.extend(
+                [
+                    {
+                        "role": "assistant",
+                        "content": raw_response,
+                    },
+                    {
+                        "role": "user",
+                        "content": repair_prompt,
+                    },
+                ]
             )
 
             messages.extend(

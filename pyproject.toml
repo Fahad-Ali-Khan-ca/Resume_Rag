@@ -21,6 +21,7 @@ nvidia = [
     "torch==2.11.0",
     "torchvision==0.26.0",
     "torchaudio==2.11.0",
+    "llama-cpp-python==0.3.35",
 ]
 
 amd = [
@@ -65,6 +66,11 @@ torchaudio = [
 rocm = [
     { index = "amd-rocm", extra = "amd" },
 ]
+llama-cpp-python = { index = "llamacpp-cu132" }
+
+[[tool.uv.index]]
+name = "llamacpp-cu132"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cu132"
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

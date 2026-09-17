@@ -672,13 +672,6 @@ class Gemma4LLM(LLM):
 # --------------------------------------------------------------------------- #
 
 class LlamaCppLLM(LLM):
-    """
-    llama.cpp backend.
-
-    GPU acceleration depends on how llama-cpp-python itself was compiled.
-    The Python interface here remains the same.
-    """
-
     def __init__(
         self,
         *,
@@ -690,24 +683,13 @@ class LlamaCppLLM(LLM):
     ):
         from llama_cpp import Llama
 
-        if not model_path and not (
-            repo_id
-            and filename
-        ):
-            raise ValueError(
-                "Provide either model_path or both repo_id and filename."
-            )
+        self.name = model_path or f"{repo_id}/{filename}"
 
-        self.name = (
-            model_path
-            or f"{repo_id}/{filename}"
+        common = dict(
+            n_ctx=n_ctx,
+            n_gpu_layers=n_gpu_layers,
+            verbose=False,
         )
-
-        common = {
-            "n_ctx": n_ctx,
-            "n_gpu_layers": n_gpu_layers,
-            "verbose": True,
-        }
 
         if model_path:
             self.llm = Llama(
@@ -721,6 +703,36 @@ class LlamaCppLLM(LLM):
                 **common,
             )
 
+    def _create_chat_completion(
+        self,
+        messages: list[Message],
+        cfg: GenConfig,
+        *,
+        stream: bool = False,
+    ):
+        kwargs = dict(
+            max_tokens=cfg.max_new_tokens,
+            temperature=cfg.temperature,
+            top_p=cfg.top_p,
+            stop=cfg.stop or None,
+            stream=stream,
+        )
+
+        try:
+            return self.llm.create_chat_completion(
+                messages=messages,
+                **kwargs,
+            )
+
+        except ValueError as error:
+            if "System role not supported" not in str(error):
+                raise
+
+            return self.llm.create_chat_completion(
+                messages=_merge_system_into_user(messages),
+                **kwargs,
+            )
+
     def generate(
         self,
         messages: list[Message],
@@ -728,27 +740,12 @@ class LlamaCppLLM(LLM):
     ) -> str:
         cfg = config or GenConfig()
 
-        output = self.llm.create_chat_completion(
-            messages=messages,
-            max_tokens=cfg.max_new_tokens,
-            temperature=cfg.temperature,
-            top_p=cfg.top_p,
-            stop=cfg.stop or None,
+        output = self._create_chat_completion(
+            messages,
+            cfg,
         )
 
-        content = output[
-            "choices"
-        ][0][
-            "message"
-        ][
-            "content"
-        ]
-
-        return (
-            content.strip()
-            if content
-            else ""
-        )
+        return output["choices"][0]["message"]["content"].strip()
 
     def stream(
         self,
@@ -757,25 +754,17 @@ class LlamaCppLLM(LLM):
     ) -> Iterator[str]:
         cfg = config or GenConfig()
 
-        for chunk in self.llm.create_chat_completion(
-            messages=messages,
-            max_tokens=cfg.max_new_tokens,
-            temperature=cfg.temperature,
-            top_p=cfg.top_p,
-            stop=cfg.stop or None,
+        chunks = self._create_chat_completion(
+            messages,
+            cfg,
             stream=True,
-        ):
-            delta = chunk[
-                "choices"
-            ][0][
-                "delta"
-            ].get(
-                "content"
-            )
+        )
+
+        for chunk in chunks:
+            delta = chunk["choices"][0]["delta"].get("content")
 
             if delta:
                 yield delta
-
 
 # --------------------------------------------------------------------------- #
 # Model registry
@@ -879,7 +868,7 @@ REGISTRY: dict[str, Spec] = {
         {
             "repo_id": "bartowski/gemma-2-2b-it-GGUF",
             "filename": "*Q4_K_M.gguf",
-            "n_ctx": 4096,
+            "n_ctx": 8192,
             "n_gpu_layers": -1,
         },
     ),

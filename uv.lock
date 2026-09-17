@@ -340,6 +340,15 @@ nvtx = [
 ]
 
 [[package]]
+name = "diskcache"
+version = "5.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
+]
+
+[[package]]
 name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -486,6 +495,23 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/41/f2/d34e8b3a08a9cc79a50b2208a93dce981fe615b64d5a4d4abee421d898df/joblib-1.5.3.tar.gz", hash = "sha256:8561a3269e6801106863fd0d6d84bb737be9e7631e33aaed3fb9ce5953688da3", size = 331603, upload-time = "2025-12-15T08:41:46.427Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl", hash = "sha256:5fc3c5039fc5ca8c0276333a188bbd59d6b7ab37fe6632daa76bc7f9ec18e713", size = 309071, upload-time = "2025-12-15T08:41:44.973Z" },
+]
+
+[[package]]
+name = "llama-cpp-python"
+version = "0.3.35"
+source = { registry = "https://abetlen.github.io/llama-cpp-python/whl/cu132" }
+dependencies = [
+    { name = "diskcache" },
+    { name = "jinja2" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://repo.amd.com/rocm/whl-multi-arch/" }, marker = "(python_full_version < '3.11' and extra == 'extra-10-resume-rag-nvidia') or (extra == 'extra-10-resume-rag-amd' and extra == 'extra-10-resume-rag-nvidia')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version == '3.11.*' and extra == 'extra-10-resume-rag-nvidia') or (extra == 'extra-10-resume-rag-amd' and extra == 'extra-10-resume-rag-nvidia')" },
+    { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and extra == 'extra-10-resume-rag-nvidia') or (extra == 'extra-10-resume-rag-amd' and extra == 'extra-10-resume-rag-nvidia')" },
+    { name = "typing-extensions" },
+]
+wheels = [
+    { url = "https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.35-cu132/llama_cpp_python-0.3.35-py3-none-manylinux_2_35_x86_64.whl" },
+    { url = "https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.35-cu132/llama_cpp_python-0.3.35-py3-none-win_amd64.whl" },
 ]
 
 [[package]]
@@ -1561,6 +1587,7 @@ amd = [
     { name = "torchvision", version = "0.27.0+rocm7.14.0", source = { registry = "https://repo.amd.com/rocm/whl-multi-arch/" }, extra = ["device-gfx1200"], marker = "extra == 'extra-10-resume-rag-amd'" },
 ]
 nvidia = [
+    { name = "llama-cpp-python" },
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
     { name = "torchaudio", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
     { name = "torchvision", version = "0.26.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
@@ -1570,6 +1597,7 @@ nvidia = [
 requires-dist = [
     { name = "accelerate", specifier = ">=1.14.0" },
     { name = "huggingface-hub", specifier = ">=1.21.0" },
+    { name = "llama-cpp-python", marker = "extra == 'nvidia'", specifier = "==0.3.35", index = "https://abetlen.github.io/llama-cpp-python/whl/cu132" },
     { name = "numpy", specifier = ">=2.2.6" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pypdf", specifier = ">=6.16.2" },
