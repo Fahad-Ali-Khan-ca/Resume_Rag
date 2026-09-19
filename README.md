@@ -1,285 +1,93 @@
-# Resume RAG
+# ResumeForge (Resume RAG)
 
-An evidence-grounded resume generation pipeline that turns a candidate's existing career documents into structured evidence and uses that evidence to generate job-specific resume content with a local LLM.
+ResumeForge is a **local, evidence-grounded resume tailoring pipeline**. It parses candidate career documents, extracts traceable evidence, matches that evidence against a job description, generates and validates resume bullets, and composes a **single-column, one-page LaTeX/PDF resume**.
 
-## Aim
+ResumeForge is the resume-generation component of the larger Autonomous Job Applier project. **v1 generates resumes; it does not scrape jobs or submit applications.** Generated claims and job-requirement matches still require human review before applying.
 
-The goal of this project is to generate high-quality, job-tailored resumes without inventing experience.
-
-Instead of asking an LLM to rewrite a resume directly, the system first:
-
-1. Parses the user's source documents.
-2. Splits them into retrievable chunks.
-3. Extracts structured evidence from those chunks.
-4. Uses the job description to identify relevant evidence.
-5. Generates resume content grounded in that evidence.
-6. Renders the final output into a resume format.
-
-This project is designed to become the resume-modification component of the larger **Autonomous Job Applier** system.
-
-## Core Idea
+## How v1 works
 
 ```text
-Candidate Documents
-        │
-        ▼
-     Parser
-        │
-        ▼
-     Chunker
-        │
-        ▼
-Evidence Extractor
-        │
-        ▼
-Structured Evidence
-        │
-        ├──────────────┐
-        │              │
-        ▼              ▼
-Job Description   Resume Context
-        │              │
-        └──────┬───────┘
-               ▼
-           Local LLM
-               │
-               ▼
-      Grounded Resume Content
-               │
-               ▼
-          LaTeX Renderer
-               │
-               ▼
-            Resume
+Candidate corpus (profile.md, experience.md, projects.md; optional PDF/TXT/MD)
+     |
+Canonical entity parser + candidate profile (stable experience/project IDs)
+     |
+Entity-bounded chunks -> local LLM evidence extraction -> evidence cache
+     |
+Hybrid retrieval (BM25 + semantic) + job-requirement analysis/matching
+     |
+Evidence-bounded resume planner -> bullet generation -> claim validation
+     |
+Composition policy (entity coverage, verified bullet targets, skill selection)
+     |
+One-column LaTeX template -> PDF compilation -> page-count/spacing fit
+     |
+output/tailored_resume.json + .tex + .pdf + layout_report.json
 ```
 
-## Current Project Structure
-
-```text
-Resume_Rag/
-│
-├── ingestion/
-│   ├── parser.py
-│   ├── chunker.py
-│   └── evidence_extractor.py
-│
-├── rendering/
-│   └── latex_renderer.py
-│
-├── llm.py
-├── local_llm.py
-├── run_pipeline.py
-├── pyproject.toml
-├── uv.lock
-│
-├── corpus/
-│   └── candidate source documents
-│
-├── jobs/
-│   └── job descriptions
-│
-└── docs/
-    ├── SETUP.md
-    ├── RUN.md
-    └── ARCHITECTURE.md
-```
-
-The exact structure may evolve as the remaining ranking, generation, validation, and rendering stages are completed.
-
-## Supported Input Documents
-
-The ingestion pipeline is intended to work with:
-
-- PDF
-- Markdown
-- Plain text
-
-These documents form the evidence corpus used by the pipeline.
+The canonical parser keeps an employer's or project's source facts within that entity. Bullets must reference evidence owned by their entry; a metric belonging to one project must not be reassigned to another. The validator checks generated statements against the supplied evidence, but model-generated evidence and validation are **not a guarantee of factual accuracy**.
 
 ## Requirements
 
-- Python 3.12 recommended
-- `uv`
-- PyTorch
-- Hugging Face Transformers
-- A compatible local model
-- NVIDIA GPU recommended for local inference
+- Python 3.12, [uv](https://docs.astral.sh/uv/getting-started/installation/), and Git.
+- A compatible local model. The tested Windows/NVIDIA configuration uses `gemma-4-e2b-q4` with `llama.cpp`. Model files are downloaded on first use.
+- A LaTeX distribution providing **`pdflatex` on PATH**, including the packages used by the template (`geometry`, `enumitem`, `hyperref`, `titlesec`, `lmodern`, `microtype`, and `fontenc`). The verified one-page PDF step requires `pdflatex`.
+- GPU acceleration is optional in principle, but model size, installed wheels, platform and inference backend determine practical performance. See [Setup](docs/SETUP.md).
 
-CPU execution is possible but significantly slower for LLM inference.
+## Quick start — Windows PowerShell / NVIDIA
 
-### GPU Notes
-
-#### NVIDIA
-
-The project has been tested with CUDA-enabled PyTorch.
-
-Example hardware used during development:
-
-```text
-NVIDIA GeForce RTX 3050 Ti Laptop GPU
-```
-
-#### AMD on Windows
-
-Native PyTorch ROCm support is currently not available for standard Windows installations.
-
-On an AMD Windows machine, the project may therefore fall back to CPU unless another supported inference backend is configured.
-
-See [docs/SETUP.md](docs/SETUP.md) for installation details.
-
-## Quick Start
-
-### 1. Clone the repository
-
-```bash
-git clone <your-repository-url>
+```powershell
+git clone https://github.com/Fahad-Ali-Khan-ca/Resume_Rag.git
 cd Resume_Rag
-```
-
-### 2. Install `uv`
-
-Follow the official installation instructions:
-
-https://docs.astral.sh/uv/getting-started/installation/
-
-### 3. Create the virtual environment
-
-```bash
 uv venv --python 3.12
+uv sync --extra nvidia
+pdflatex --version
 ```
 
-Activate it.
-
-#### Windows PowerShell
+Create **private** `corpus/raw/profile.md`, `corpus/raw/experience.md`, and `corpus/raw/projects.md` using the canonical structure described in [Run guide](docs/RUN.md); put a job description in `jobs/test_job.txt`.
 
 ```powershell
-.venv\Scripts\Activate.ps1
+uv run --extra nvidia python run_pipeline.py --model gemma-4-e2b-q4 --jd jobs/test_job.txt --name "Candidate Name"
 ```
 
-If PowerShell blocks script execution:
+The `--name`, `--email`, `--phone`, `--location`, `--linkedin`, and `--github` options override contact fields from `profile.md`. See [Run guide](docs/RUN.md) for details and troubleshooting.
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-.venv\Scripts\Activate.ps1
-```
+## Outputs
 
-#### Linux / macOS
+| File | Purpose |
+| --- | --- |
+| `output/tailored_resume.json` | Final **fitted** structured resume and per-bullet evidence IDs. |
+| `output/tailored_resume.tex` | Editable one-column LaTeX document; evidence IDs also appear in comments. |
+| `output/tailored_resume.pdf` | Compiled resume, checked for exactly one page. |
+| `output/layout_report.json` | Page count, layout density, entry/bullet counts, optional estimated bottom-page utilization, and warnings. |
 
-```bash
-source .venv/bin/activate
-```
+The output directory is overwritten by subsequent runs. Save comparison runs in another directory if needed. Source documents, generated resumes, local model files and credentials should not be committed to this public repository.
 
-### 4. Install dependencies
+## v1 rendering policy
 
-```bash
-uv sync
-```
+`generation/composition.py` attempts up to **three validated bullets per selected experience** (up to three experiences) and **two per selected project** (up to two projects). It can include an entry only if verified achievement evidence is available; these are **targets, not guaranteed counts**. Content must remain owned by the correct career entity. `rendering/latex_renderer.py` formats a single-column, ATS-oriented resume with an optional summary, categorized skills, experience, projects, education and certifications.
 
-If PyTorch needs to be installed for a specific GPU configuration, follow the instructions in:
+`rendering/page_fit.py` compiles the PDF, checks its page count, and tries bounded spacing presets. If it overflows, the fitter can remove optional extra bullets/summary/skills, but must not fabricate content or erase the sole validated bullet of an entry to force a page. If a readable single page is impossible, it raises an error instead of silently producing two pages. Underfilled pages receive a warning when measurable; empty space is **not** filled with invented achievements. The current command uses US Letter paper; the renderer also supports A4 programmatically.
 
-[docs/SETUP.md](docs/SETUP.md)
+**Limitations:** v1 may select repetitive bullets or overbroad skill labels, and requirement matching can overstate experience-duration or hands-on matches. Review all claims, skills, dates, quantitative requirements, and the final PDF before submitting it.
 
-### 5. Add candidate documents
-
-Place resume, project, work-history, or supporting documents in the corpus directory.
-
-Example:
+## Repository map
 
 ```text
-corpus/
-├── software_resume.pdf
-├── project_notes.md
-└── experience.txt
+ingestion/    canonical_parser.py, parser.py, chunker.py, evidence_extractor.py
+retrieval/    lexical, semantic and hybrid evidence retrieval
+jd/          job description requirement extraction
+matching/    evidence/requirement matching
+generation/  candidate_profile.py, planner.py, bullet_generator.py,
+             resume_generator.py, composition.py
+validation/  claim_validator.py
+rendering/   latex_renderer.py, page_fit.py
+run_pipeline.py
+docs/        SETUP.md, RUN.md, ARCHITECTURE.md, RENDERING.md
 ```
-
-### 6. Add a job description
-
-Example:
-
-```text
-jobs/test_job.txt
-```
-
-### 7. Run the pipeline
-
-Example:
-
-```bash
-uv run python run_pipeline.py --model gemma-2b --jd jobs/test_job.txt --name "Candidate Name"
-```
-
-If the environment is already synchronized and you intentionally want to skip dependency synchronization:
-
-```bash
-uv run --no-sync python run_pipeline.py --model gemma-2b --jd jobs/test_job.txt --name "Candidate Name"
-```
-
-See [docs/RUN.md](docs/RUN.md) for more detail.
-
-## Running Individual Components
-
-The evidence extractor can also be executed independently:
-
-```bash
-uv run python -m ingestion.evidence_extractor
-```
-
-This is useful when debugging the ingestion pipeline before running the complete resume-generation workflow.
-
-## Development Status
-
-The project currently focuses on the evidence-grounded RAG pipeline.
-
-Major areas include:
-
-- document ingestion
-- chunking
-- evidence extraction
-- local LLM abstraction
-- resume generation
-- LaTeX rendering
-- evidence validation
-
-Some components may still be under active development.
-
-## Why Evidence Grounding Matters
-
-A standard LLM resume generator can produce polished language while also introducing unsupported claims.
-
-This system attempts to reduce that risk by making source evidence a first-class object in the generation pipeline.
-
-The intended rule is:
-
-```text
-No resume claim should exist unless the system can trace it back to candidate evidence.
-```
-
-That makes the system better suited for autonomous resume generation, where there is no human manually reviewing every generated bullet.
 
 ## Documentation
 
-- [Setup Guide](docs/SETUP.md)
-- [Running the Pipeline](docs/RUN.md)
-- [Architecture](docs/ARCHITECTURE.md)
-
-## Larger Project
-
-Resume RAG is intended to become one module inside the **Autonomous Job Applier**:
-
-```text
-Job Discovery
-     │
-     ▼
-Job Scraper
-     │
-     ▼
-Resume RAG
-     │
-     ▼
-Application Package
-     │
-     ▼
-Job Applier
-```
-
-The long-term goal is a system capable of discovering jobs, generating evidence-grounded application material, and submitting applications with minimal manual intervention.
+- [Environment and LaTeX setup](docs/SETUP.md)
+- [Canonical corpus, CLI, outputs and troubleshooting](docs/RUN.md)
+- [End-to-end design and provenance](docs/ARCHITECTURE.md)
+- [One-page composition and rendering contract](docs/RENDERING.md)

@@ -1,282 +1,122 @@
-# Running Resume RAG
+# Running ResumeForge v1
 
-This document explains how to run the pipeline and individual development stages.
+Run commands from the repository root. The full pipeline writes its outputs to `output/`.
 
-## Before Running
+## 1. Prepare candidate data
 
-Confirm that dependencies are installed:
+Create private files under `corpus/raw/`. The preferred input is **three canonical Markdown documents** rather than an arbitrary resume PDF: this provides explicit employer and project boundaries. The example below is structural only; replace every value with the candidate's own verifiable information.
 
-```bash
-uv sync
+`corpus/raw/profile.md`:
+
+```markdown
+# Candidate
+## Contact
+Name: Candidate Name
+Email: candidate@example.com
+Location: Toronto, ON
+LinkedIn: linkedin.com/in/example
+GitHub: github.com/example
+
+## Skills
+- Python
+- SQL
+- Git
+
+## Education
+### Example University
+Degree: Bachelor of Engineering
+Field: Software Engineering
+Location: Toronto, ON
+Graduation: August 2025
 ```
 
-Confirm that the project environment works:
+`corpus/raw/experience.md`:
 
-```bash
-uv run python -c "import torch; print('Torch:', torch.__version__)"
+```markdown
+## exp_example_employer_2024
+Company: Example Employer
+Title: Software Engineer Intern
+Location: Toronto, ON
+Start: 2024-05
+End: 2024-08
+
+### Responsibilities
+- Implemented a documented internal API.
+
+### Achievements
+- Increased automated test coverage from a verified source measurement.
 ```
 
-## Prepare the Corpus
+`corpus/raw/projects.md`:
 
-Place source documents inside the corpus directory.
+```markdown
+## project_example
+Name: Example Project
+Date: 2025
 
-Example:
+### Technologies
+- Python
+- Docker
 
-```text
-corpus/
-├── resume.pdf
-├── project_history.md
-├── software_projects.pdf
-└── experience.txt
+### Features
+- Built a documented data ingestion workflow.
 ```
 
-The corpus should contain factual source material about the candidate.
+Use one `##` entry per employer/project. Keep employer/project facts under their own entry rather than a shared section. Add only truthful, source-backed accomplishments and measurements. Additional PDFs, Markdown and TXT files are accepted as fallback evidence, but their attribution is less reliable than canonical entities. Do not commit personal corpus data.
 
-The quality of this evidence directly affects the quality of the generated resume.
+## 2. Prepare the job posting
 
-## Prepare the Job Description
+Save its full text in a file such as `jobs/test_job.txt`. Check whether the posting and extracted requirements actually match the position you intend to apply for.
 
-Create a plain-text job description.
+## 3. Run the full pipeline
 
-Example:
-
-```text
-jobs/software_engineer.txt
-```
-
-Paste the complete job posting into that file.
-
-## Run the Full Pipeline
-
-Example:
-
-```bash
-uv run python run_pipeline.py \
-  --model gemma-2b \
-  --jd jobs/software_engineer.txt \
-  --name "Candidate Name"
-```
-
-### Windows PowerShell
-
-The same command can be run on one line:
+**Windows PowerShell, NVIDIA configuration used for v1 testing:**
 
 ```powershell
-uv run python run_pipeline.py --model gemma-2b --jd jobs/software_engineer.txt --name "Candidate Name"
+uv sync --extra nvidia
+pdflatex --version
+uv run --extra nvidia python run_pipeline.py --model gemma-4-e2b-q4 --jd jobs/test_job.txt --name "Candidate Name"
 ```
 
-## CLI Arguments
+A single-line command avoids PowerShell continuation issues. The first model run downloads its model weights; repeated runs can reuse cached evidence when model and sources are unchanged.
 
-The current pipeline command follows this general form:
+Alternative configured model aliases include `gemma-2b-q4` (llama.cpp) and `gemma-4-e2b` (full Transformers checkpoint; substantially higher memory requirements). Not all aliases or GPU extras will work on every operating system or hardware configuration. See [Setup](SETUP.md).
+
+## CLI parameters
+
+`--jd` (required) takes a text job posting. `--model` selects a `local_llm.py` registry alias (default: `gemma-2b`). Optional overrides: `--name`, `--email`, `--phone`, `--location`, `--linkedin`, `--github`. The current full pipeline uses US Letter paper; A4 is supported by the renderer's Python API but not exposed as a CLI option.
+
+## What success produces
 
 ```text
-run_pipeline.py
-    --model <model alias>
-    --jd <job description file>
-    --name <candidate name>
+output/
+  tailored_resume.json   # final fitted structured content and evidence IDs
+  tailored_resume.tex    # editable LaTeX and evidence-ID comments
+  tailored_resume.pdf    # compiled, verified one-page document
+  layout_report.json     # density, page count, bullet counts, warnings
 ```
 
-### `--model`
+The console should end with `Pages: 1` and `ResumeForge complete.`. If `layout_report.json` warns that an entity has fewer validated bullets than its target, add **distinct, truthful source material** rather than forcing the model to generate filler. If `estimated_bottom_usage` is `null`, the optional PDF text-position measurement was unavailable; page count was still checked.
 
-Selects the configured local LLM.
+The `output/` files are replaced on each run. To compare two models:
 
-Example:
-
-```bash
---model gemma-2b
+```powershell
+Copy-Item .\output .\output_gemma4_e2b_q4 -Recurse
 ```
 
-### `--jd`
-
-Path to the target job description.
-
-Example:
-
-```bash
---jd jobs/test_job.txt
-```
-
-### `--name`
-
-Candidate name inserted into the generated resume context.
-
-Example:
-
-```bash
---name "Candidate Name"
-```
-
-## Run Without Dependency Synchronization
-
-Normally:
-
-```bash
-uv run ...
-```
-
-may ensure the project environment is synchronized.
-
-When debugging an already-configured environment, you can intentionally skip synchronization:
-
-```bash
-uv run --no-sync python run_pipeline.py --model gemma-2b --jd jobs/test_job.txt --name "Candidate Name"
-```
-
-Use this only when you know the current virtual environment already contains the required dependencies.
-
-## Run the Evidence Extractor
-
-The evidence extraction stage can be tested independently:
-
-```bash
-uv run python -m ingestion.evidence_extractor
-```
-
-This is useful for confirming:
-
-- documents are discovered
-- parser output is valid
-- chunks are generated
-- the local model loads
-- structured evidence is extracted
-
-A successful development run previously discovered output similar to:
-
-```text
-Chunks discovered: 24
-```
-
-The exact number depends on the corpus.
-
-## Typical Pipeline Flow
-
-A complete execution is intended to follow this flow:
-
-```text
-1. Load local model
-
-2. Parse candidate corpus
-
-3. Split documents into chunks
-
-4. Extract evidence from chunks
-
-5. Read target job description
-
-6. Identify relevant evidence
-
-7. Generate resume sections
-
-8. Validate generated claims
-
-9. Render final resume
-```
-
-The exact stage numbering may change while the project is under development.
-
-## Debugging by Stage
-
-When the complete pipeline fails, test the earliest stage independently.
-
-### Parser
-
-Check that files are readable and supported.
-
-Expected formats:
-
-```text
-.pdf
-.md
-.txt
-```
-
-### Chunker
-
-Verify that parsed documents produce non-empty chunks.
-
-### Evidence Extractor
-
-Run:
-
-```bash
-uv run python -m ingestion.evidence_extractor
-```
-
-### Local LLM
-
-Verify GPU detection:
-
-```bash
-uv run python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
-```
-
-### Renderer
-
-If LaTeX generation fails, test the renderer separately and verify that all imported resume data structures still match the renderer interface.
-
-## Common Problems
-
-### `nvcc` is not recognized
-
-`nvcc` belongs to the CUDA Toolkit.
-
-Its absence does not necessarily mean PyTorch cannot use the GPU.
-
-The more important test is:
-
-```bash
-uv run python -c "import torch; print(torch.cuda.is_available())"
-```
-
-If this returns:
-
-```text
-True
-```
-
-then PyTorch can access CUDA.
-
-### `torch.cuda.is_available()` returns `False`
-
-Possible causes include:
-
-- CPU-only PyTorch installation
-- incompatible GPU driver
-- AMD GPU on Windows
-- unsupported PyTorch build
-- incorrect environment
-
-### Module import errors
-
-Run commands from the repository root.
-
-Correct:
-
-```text
-Resume_Rag/
-> uv run python -m ingestion.evidence_extractor
-```
-
-Avoid running package modules from inside their subdirectory unless the code explicitly supports it.
-
-## Recommended Development Workflow
-
-Use the smallest failing stage first:
-
-```text
-Parser
-  ↓
-Chunker
-  ↓
-Evidence Extractor
-  ↓
-Retrieval
-  ↓
-Generation
-  ↓
-Validation
-  ↓
-Rendering
-```
-
-Only run the complete pipeline after the earlier stages succeed independently.
+## Debugging
+
+| Symptom | What to check |
+| --- | --- |
+| `pdflatex is required` | Install a LaTeX distribution and confirm `pdflatex --version` works in the same terminal. |
+| LaTeX compilation fails | Read the reported `pdflatex` error; install missing template packages and inspect `output/tailored_resume.tex` if it exists. |
+| One-page fitting raises | Review the selected entries and required content; the fitter refuses to destroy core evidence just to fit. |
+| Too few bullets | Inspect `layout_report.json`, canonical source quality, extracted evidence, entity ownership and claim-validation results. |
+| Repeated bullets or bad skills | These are known v1 quality limitations; edit canonical sources as appropriate and review the final PDF manually. |
+| Unreasonable STRONG experience match | Verify required years and actual hands-on work independently; match labels are not an eligibility guarantee. |
+| Unexpected extraction work | The evidence cache changes with model identity or source changes. |
+| Import error | Run from the repository root with the correct `uv` environment/extra. |
+
+For developer diagnostics, `uv run --extra nvidia python -m ingestion.evidence_extractor` runs the extractor independently once its inputs are prepared. Read [Rendering](RENDERING.md) for page-fit behavior and [Architecture](ARCHITECTURE.md) for the full data flow.
+
+**Before submission:** check that every skill, employer, date, project, metric and requirement match is accurate, and visually inspect the generated one-page PDF.

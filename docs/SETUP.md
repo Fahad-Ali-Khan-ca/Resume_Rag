@@ -1,301 +1,57 @@
-# Setup Guide
+# ResumeForge v1 setup
 
-This document explains how to create the development environment for Resume RAG.
+This guide covers the Windows/NVIDIA configuration used to test the one-page rendering pipeline. Other hardware may require different model wheels or inference settings.
 
-## 1. Prerequisites
+## Prerequisites
 
-Install:
+Install Git, Python 3.12, [uv](https://docs.astral.sh/uv/getting-started/installation/) and a LaTeX distribution with `pdflatex` on PATH (MiKTeX or TeX Live). The template uses `geometry`, `enumitem`, `hyperref`, `titlesec`, `lmodern`, `microtype` and `fontenc`; make sure those packages are available.
 
-- Git
-- Python 3.12
-- `uv`
-
-Check Python:
-
-```bash
-python --version
-```
-
-Check Git:
-
-```bash
+```powershell
 git --version
-```
-
-## 2. Clone the Repository
-
-```bash
-git clone <your-repository-url>
-cd Resume_Rag
-```
-
-## 3. Install `uv`
-
-`uv` is the Python package and environment manager used by this project.
-
-Official installation guide:
-
-https://docs.astral.sh/uv/getting-started/installation/
-
-Verify:
-
-```bash
 uv --version
+pdflatex --version
 ```
 
-## 4. Create the Virtual Environment
+The pipeline now **compiles and checks the PDF**, not just writes a `.tex` file. A working Python environment alone is insufficient.
 
-```bash
+## Clone and install — Windows PowerShell / NVIDIA
+
+```powershell
+git clone https://github.com/Fahad-Ali-Khan-ca/Resume_Rag.git
+cd Resume_Rag
 uv venv --python 3.12
+uv sync --extra nvidia
 ```
 
-This creates:
+You may activate the environment using `.\.venv\Scripts\Activate.ps1`, but `uv run` does not require manual activation. The NVIDIA extra selects the project's CUDA/PyTorch and configured `llama-cpp-python` wheel dependencies. GPU support depends on compatible drivers, wheel availability and model size.
 
-```text
-.venv/
-```
-
-### Windows
+Verify the installed environment:
 
 ```powershell
-.venv\Scripts\Activate.ps1
+uv run --extra nvidia python -c "import pydantic, pypdf, llama_cpp; print('Python dependencies OK')"
+pdflatex --version
 ```
 
-If script execution is blocked:
+For a PyTorch/CUDA backend check (distinct from the llama.cpp backend):
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-.venv\Scripts\Activate.ps1
+uv run --extra nvidia python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-### Linux / macOS
+## Model choice
 
-```bash
-source .venv/bin/activate
+The tested v1 workflow uses `--model gemma-4-e2b-q4`, mapped in `local_llm.py` to `ggml-org/gemma-4-E2B-it-GGUF` / `gemma-4-E2B-it-Q4_0.gguf` via llama.cpp. The model is downloaded on first use. `gemma-2b-q4` is also registered. `gemma-4-e2b` is the full Transformers checkpoint and needs substantially more memory. Model availability, license acceptance, required access and GPU support depend on the selected checkpoint and local setup.
+
+**AMD on Windows:** the repository's `amd` extra targets an ROCm-based PyTorch configuration; do not assume that it works on all Windows AMD systems. The NVIDIA-specific `llama-cpp-python` wheel is not a generic AMD acceleration package. Use a compatible local backend and verify it on the target machine.
+
+## Private inputs and outputs
+
+Create `corpus/raw/profile.md`, `corpus/raw/experience.md`, `corpus/raw/projects.md` with factual data, and a text job posting under `jobs/`. See [RUN.md](RUN.md) for canonical format. The repo ignores private raw/processed corpus and generated `output*/` files; check `git status` before pushing anything publicly.
+
+## First complete run
+
+```powershell
+uv run --extra nvidia python run_pipeline.py --model gemma-4-e2b-q4 --jd jobs/test_job.txt --name "Candidate Name"
 ```
 
-## 5. Install Project Dependencies
-
-If the repository contains a valid `uv.lock`:
-
-```bash
-uv sync
-```
-
-`uv` reads the project dependencies from:
-
-```text
-pyproject.toml
-```
-
-and installs the resolved versions from:
-
-```text
-uv.lock
-```
-
-## `pyproject.toml`
-
-`pyproject.toml` is the main Python project configuration file.
-
-It typically stores:
-
-- project name
-- Python version requirement
-- runtime dependencies
-- development dependencies
-- package metadata
-- tool configuration
-
-Example conceptually:
-
-```toml
-[project]
-name = "resume-rag"
-requires-python = ">=3.10"
-
-dependencies = [
-    "transformers",
-    "pypdf",
-    "pydantic",
-]
-```
-
-Do not manually edit the virtual environment to manage packages. Update the project dependency configuration instead.
-
-## `uv.lock`
-
-`uv.lock` records the exact dependency versions resolved by `uv`.
-
-This improves reproducibility:
-
-```text
-pyproject.toml
-      │
-      ▼
-dependency requirements
-      │
-      ▼
-uv resolves versions
-      │
-      ▼
-uv.lock
-      │
-      ▼
-same environment across machines
-```
-
-The lock file should normally be committed to Git.
-
-## Adding a Package
-
-Example:
-
-```bash
-uv add pydantic
-```
-
-This updates both:
-
-```text
-pyproject.toml
-uv.lock
-```
-
-## Removing a Package
-
-```bash
-uv remove pydantic
-```
-
-## Updating Dependencies
-
-Update a package:
-
-```bash
-uv lock --upgrade-package transformers
-uv sync
-```
-
-Upgrade all resolvable dependencies:
-
-```bash
-uv lock --upgrade
-uv sync
-```
-
-Review dependency upgrades before committing them.
-
-## PyTorch Installation
-
-PyTorch installation depends on the machine.
-
-Official selector:
-
-https://pytorch.org/get-started/locally/
-
-### NVIDIA GPU
-
-Use a CUDA-enabled PyTorch build compatible with your system.
-
-During development, the NVIDIA environment used a CUDA-enabled PyTorch installation.
-
-Verify CUDA:
-
-```bash
-uv run python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)"
-```
-
-Expected example:
-
-```text
-True
-NVIDIA GeForce RTX 3050 Ti Laptop GPU
-```
-
-### CPU
-
-CPU inference works without CUDA.
-
-Verify:
-
-```bash
-uv run python -c "import torch; print(torch.cuda.is_available())"
-```
-
-Output:
-
-```text
-False
-```
-
-This is not an error if CPU execution is intentional.
-
-### AMD GPU on Windows
-
-Standard PyTorch ROCm wheels are primarily targeted at Linux.
-
-A Windows AMD GPU may therefore not be exposed through:
-
-```python
-torch.cuda.is_available()
-```
-
-For the current project, treat AMD Windows as CPU fallback unless a supported backend is explicitly configured.
-
-Do not install Linux ROCm wheels into a Windows environment.
-
-## Hugging Face Models
-
-The project uses local Hugging Face models through `transformers`.
-
-One model used during development is:
-
-```text
-google/gemma-2-2b-it
-```
-
-Some models require accepting a license or authenticating with Hugging Face.
-
-Authenticate if required:
-
-```bash
-huggingface-cli login
-```
-
-or use the current Hugging Face CLI command supported by your installed package version.
-
-Do not commit access tokens to Git.
-
-## Recommended Directory Layout
-
-```text
-Resume_Rag/
-│
-├── corpus/
-├── jobs/
-├── ingestion/
-├── rendering/
-├── docs/
-├── run_pipeline.py
-├── llm.py
-├── local_llm.py
-├── pyproject.toml
-└── uv.lock
-```
-
-## Verify the Environment
-
-Run:
-
-```bash
-uv run python -c "import torch, transformers, pydantic, pypdf; print('Environment OK')"
-```
-
-Then verify the ingestion module:
-
-```bash
-uv run python -m ingestion.evidence_extractor
-```
-
-If both commands succeed, the environment is ready for pipeline execution.
+A successful run writes `output/tailored_resume.pdf`, `tailored_resume.tex`, `tailored_resume.json`, and `layout_report.json`. The PDF is required to compile to exactly one page; when it cannot fit without removing necessary content, the fitter raises instead of silently making an unreadable document. Consult [RENDERING.md](RENDERING.md) for page-fitting behavior.
