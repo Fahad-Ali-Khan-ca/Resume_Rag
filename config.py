@@ -10,3 +10,7 @@ DOCUMENTS_FILE = PROCESSED_DIR / "documents.jsonl"
 CHUNKS_FILE = PROCESSED_DIR / "chunks.jsonl"
 EVIDENCE_FILE = PROCESSED_DIR / "evidence.jsonl"
 STATE_FILE = PROCESSED_DIR / "evidence_state.json"
+CANDIDATE_PROFILE_FILE = (
+    PROCESSED_DIR
+    / "candidate_profile.json"
+)

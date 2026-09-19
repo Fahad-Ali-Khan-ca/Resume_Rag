@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from pydantic import (
@@ -18,6 +17,12 @@ from matching.evidence_map import (
     EvidenceMap,
 )
 
+from generation.candidate_profile import (
+    CandidateProfile,
+    CertificationEntry,
+    EducationEntry,
+)
+
 from generation.planner import (
     plan_resume,
 )
@@ -32,8 +37,10 @@ from validation.claim_validator import (
 
 
 class ResumeBulletRecord(BaseModel):
-
     section: str
+
+    entry_id: str | None = None
+
     text: str
 
     evidence_ids: list[str]
@@ -45,8 +52,33 @@ class ResumeBulletRecord(BaseModel):
     validated: bool = True
 
 
-class TailoredResume(BaseModel):
+class ResumeExperienceEntry(BaseModel):
+    entry_id: str
+    company: str
+    title: str
+    location: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
 
+    bullets: list[
+        ResumeBulletRecord
+    ] = Field(default_factory=list)
+
+
+class ResumeProjectEntry(BaseModel):
+    entry_id: str
+    name: str
+    technologies: list[str] = Field(
+        default_factory=list
+    )
+    date: str | None = None
+
+    bullets: list[
+        ResumeBulletRecord
+    ] = Field(default_factory=list)
+
+
+class TailoredResume(BaseModel):
     target_role: str | None = None
     company: str | None = None
 
@@ -58,16 +90,26 @@ class TailoredResume(BaseModel):
         default_factory=list
     )
 
-    sections: dict[
-        str,
-        list[ResumeBulletRecord],
-    ] = Field(default_factory=dict)
+    experience: list[
+        ResumeExperienceEntry
+    ] = Field(default_factory=list)
+
+    projects: list[
+        ResumeProjectEntry
+    ] = Field(default_factory=list)
+
+    education: list[
+        EducationEntry
+    ] = Field(default_factory=list)
+
+    certifications: list[
+        CertificationEntry
+    ] = Field(default_factory=list)
 
 
 def source_label(
     card: dict,
 ) -> str:
-
     entity = card.get(
         "entity"
     )
@@ -101,10 +143,10 @@ def generate_resume(
         str,
         dict,
     ],
+    profile: CandidateProfile,
     validator_llm: LLM | None = None,
     max_retries: int = 2,
 ) -> TailoredResume:
-
     validator_llm = (
         validator_llm
         or generator_llm
@@ -115,24 +157,30 @@ def generate_resume(
         analysis,
         evidence_map,
         evidence_lookup,
+        profile,
     )
 
-    summary = []
+    summary: list[
+        ResumeBulletRecord
+    ] = []
 
-    sections: dict[
+    experience_bullets: dict[
+        str,
+        list[ResumeBulletRecord],
+    ] = {}
+
+    project_bullets: dict[
         str,
         list[ResumeBulletRecord],
     ] = {}
 
     for planned in plan.bullets:
-
         feedback = None
         accepted = None
 
         for _ in range(
             max_retries + 1
         ):
-
             bullet = generate_bullet(
                 generator_llm,
                 planned,
@@ -149,13 +197,11 @@ def generate_resume(
             )
 
             if validation.supported:
-
                 labels = []
 
                 for evidence_id in (
                     bullet.evidence_ids
                 ):
-
                     card = (
                         evidence_lookup.get(
                             evidence_id
@@ -167,7 +213,10 @@ def generate_resume(
                             card
                         )
 
-                        if label not in labels:
+                        if (
+                            label
+                            not in labels
+                        ):
                             labels.append(
                                 label
                             )
@@ -176,6 +225,9 @@ def generate_resume(
                     ResumeBulletRecord(
                         section=(
                             bullet.section
+                        ),
+                        entry_id=(
+                            bullet.entry_id
                         ),
                         text=bullet.text,
                         evidence_ids=(
@@ -206,21 +258,85 @@ def generate_resume(
         if not accepted:
             continue
 
-        if (
-            accepted.section
-            == "summary"
-        ):
+        if accepted.section == "summary":
             summary.append(
                 accepted
             )
 
-        else:
-            sections.setdefault(
-                accepted.section,
+        elif (
+            accepted.section
+            == "experience"
+            and accepted.entry_id
+        ):
+            experience_bullets.setdefault(
+                accepted.entry_id,
                 [],
             ).append(
                 accepted
             )
+
+        elif (
+            accepted.section
+            == "projects"
+            and accepted.entry_id
+        ):
+            project_bullets.setdefault(
+                accepted.entry_id,
+                [],
+            ).append(
+                accepted
+            )
+
+    experience = []
+
+    for entry in profile.experience:
+        bullets = experience_bullets.get(
+            entry.entry_id,
+            [],
+        )
+
+        if not bullets:
+            continue
+
+        experience.append(
+            ResumeExperienceEntry(
+                entry_id=entry.entry_id,
+                company=entry.company,
+                title=entry.title,
+                location=entry.location,
+                start_date=entry.start_date,
+                end_date=entry.end_date,
+                bullets=bullets,
+            )
+        )
+
+    projects = []
+
+    for entry in profile.projects:
+        bullets = project_bullets.get(
+            entry.entry_id,
+            [],
+        )
+
+        if not bullets:
+            continue
+
+        projects.append(
+            ResumeProjectEntry(
+                entry_id=entry.entry_id,
+                name=entry.name,
+                technologies=(
+                    entry.technologies
+                ),
+                date=entry.date,
+                bullets=bullets,
+            )
+        )
+
+    skills = (
+        plan.skills_to_emphasize
+        or profile.skills
+    )
 
     return TailoredResume(
         target_role=(
@@ -228,10 +344,13 @@ def generate_resume(
         ),
         company=analysis.company,
         summary=summary,
-        skills=(
-            plan.skills_to_emphasize
+        skills=skills,
+        experience=experience,
+        projects=projects,
+        education=profile.education,
+        certifications=(
+            profile.certifications
         ),
-        sections=sections,
     )
 
 
@@ -239,7 +358,6 @@ def save_resume(
     resume: TailoredResume,
     output_file: Path,
 ) -> None:
-
     output_file.parent.mkdir(
         parents=True,
         exist_ok=True,

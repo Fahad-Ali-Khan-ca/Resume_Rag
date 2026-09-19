@@ -872,6 +872,16 @@ REGISTRY: dict[str, Spec] = {
             "n_gpu_layers": -1,
         },
     ),
+    
+    "gemma-4-e2b-q4": Spec(
+        "llamacpp",
+        {
+            "repo_id": "ggml-org/gemma-4-E2B-it-GGUF",
+            "filename": "gemma-4-E2B-it-Q4_0.gguf",
+            "n_ctx": 8192,
+            "n_gpu_layers": -1,
+        },
+    ),
 
 }
 _BACKENDS = {

@@ -19,6 +19,9 @@ Thumbs.db
 *.code-workspace
 
 # Corpus removed till testing
-/corpus/raw
-/corpus/processed
-/resume-rag-mvp
+corpus/raw/
+corpus/processed/
+corpus/imports/
+output*/
+.env
+*.gguf

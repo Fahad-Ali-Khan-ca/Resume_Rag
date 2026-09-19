@@ -14,6 +14,25 @@ from jd.schemas import (
 )
 
 
+VALID_CATEGORIES = {
+    "technical",
+    "experience",
+    "education",
+    "certification",
+    "soft_skill",
+    "location",
+    "work_authorization",
+    "other",
+}
+
+VALID_IMPORTANCE = {
+    "required",
+    "preferred",
+    "nice_to_have",
+    "unknown",
+}
+
+
 SYSTEM_PROMPT = """
 You are the job-description analysis component of ResumeForge.
 
@@ -29,6 +48,10 @@ RULES:
 6. Soft skills should be separate from technical skills.
 7. Ignore company marketing language and generic benefits.
 8. Return valid JSON only.
+9. "category" and "importance" are different fields.
+10. Never put required, preferred, nice_to_have, or unknown in "category".
+11. Never put technical, experience, education, certification, soft_skill,
+    location, work_authorization, or other in "importance".
 
 Allowed categories:
 
@@ -102,6 +125,159 @@ def extract_json_object(
         )
 
 
+def _infer_category(
+    requirement: dict,
+) -> str:
+    """
+    Infer only the broad schema category from already-extracted fields.
+
+    This does not add a requirement or invent a skill. It is used only when
+    the model accidentally places an importance enum (for example
+    'nice_to_have') in the category field.
+    """
+
+    if requirement.get("years_experience") is not None:
+        return "experience"
+
+    skills = requirement.get("skills")
+
+    if isinstance(skills, list) and any(
+        isinstance(skill, str) and skill.strip()
+        for skill in skills
+    ):
+        return "technical"
+
+    text = str(
+        requirement.get("text", "")
+    ).lower()
+
+    if any(
+        token in text
+        for token in (
+            "degree",
+            "bachelor",
+            "master",
+            "phd",
+            "education",
+        )
+    ):
+        return "education"
+
+    if any(
+        token in text
+        for token in (
+            "certification",
+            "certified",
+            "certificate",
+        )
+    ):
+        return "certification"
+
+    if any(
+        token in text
+        for token in (
+            "work authorization",
+            "authorized to work",
+            "sponsorship",
+        )
+    ):
+        return "work_authorization"
+
+    if any(
+        token in text
+        for token in (
+            "location",
+            "onsite",
+            "on-site",
+            "hybrid",
+            "remote",
+        )
+    ):
+        return "location"
+
+    return "other"
+
+
+def normalize_requirement_enums(
+    parsed: dict,
+) -> dict:
+    """
+    Repair only obvious category/importance enum placement mistakes.
+
+    Example:
+        category="nice_to_have"
+        importance="unknown"
+
+    becomes:
+        category="technical"  # if skills are present
+        importance="nice_to_have"
+
+    Unknown structural/schema errors are intentionally left for Pydantic.
+    """
+
+    requirements = parsed.get(
+        "requirements"
+    )
+
+    if not isinstance(
+        requirements,
+        list,
+    ):
+        return parsed
+
+    for requirement in requirements:
+
+        if not isinstance(
+            requirement,
+            dict,
+        ):
+            continue
+
+        category = requirement.get(
+            "category"
+        )
+        importance = requirement.get(
+            "importance"
+        )
+
+        if category in VALID_IMPORTANCE:
+
+            if (
+                importance is None
+                or importance == "unknown"
+                or importance not in VALID_IMPORTANCE
+            ):
+                requirement[
+                    "importance"
+                ] = category
+
+            requirement[
+                "category"
+            ] = _infer_category(
+                requirement
+            )
+
+        importance = requirement.get(
+            "importance"
+        )
+
+        if importance in VALID_CATEGORIES:
+
+            if (
+                requirement.get("category")
+                not in VALID_CATEGORIES
+            ):
+                requirement[
+                    "category"
+                ] = importance
+
+            requirement[
+                "importance"
+            ] = "unknown"
+
+    return parsed
+
+
 def make_requirement_id(
     text: str,
 ) -> str:
@@ -154,6 +330,38 @@ def build_search_query(
     )
 
 
+def _repair_prompt(
+    error: Exception,
+) -> str:
+
+    if isinstance(
+        error,
+        ValidationError,
+    ):
+        return (
+            "Your previous response is valid JSON but does not match "
+            "the required schema.\n\n"
+            f"Validation error:\n{error}\n\n"
+            "Repair only the schema/type problems.\n"
+            "Do not invent, remove, or reinterpret job requirements.\n"
+            "Remember:\n"
+            "- category must be one of: technical, experience, education, "
+            "certification, soft_skill, location, work_authorization, other\n"
+            "- importance must be one of: required, preferred, "
+            "nice_to_have, unknown\n"
+            "- nice_to_have is an importance value, never a category\n"
+            "Return the complete corrected JSON object only."
+        )
+
+    return (
+        "Your previous response is not valid JSON.\n\n"
+        f"Parsing error:\n{error}\n\n"
+        "Repair only the JSON syntax.\n"
+        "Do not invent, remove, or reinterpret job requirements.\n"
+        "Return the complete corrected JSON object only."
+    )
+
+
 def extract_requirements(
     llm: LLM,
     job_description: str,
@@ -182,7 +390,7 @@ def extract_requirements(
 
     last_error = None
 
-    for _ in range(
+    for attempt in range(
         retries + 1
     ):
 
@@ -195,6 +403,10 @@ def extract_requirements(
 
             parsed = extract_json_object(
                 raw
+            )
+
+            parsed = normalize_requirement_enums(
+                parsed
             )
 
             extraction = (
@@ -255,6 +467,12 @@ def extract_requirements(
 
             last_error = error
 
+            print(
+                f"  Invalid JD analysis "
+                f"(attempt {attempt + 1}/{retries + 1}): "
+                f"{error}"
+            )
+
             messages.extend(
                 [
                     {
@@ -263,10 +481,8 @@ def extract_requirements(
                     },
                     {
                         "role": "user",
-                        "content": (
-                            "Repair your previous "
-                            "response and return "
-                            "valid JSON only."
+                        "content": _repair_prompt(
+                            error
                         ),
                     },
                 ]

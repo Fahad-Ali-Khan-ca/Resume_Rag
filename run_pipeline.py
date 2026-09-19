@@ -52,16 +52,23 @@ from matching.evidence_map import (
     build_evidence_map,
 )
 
+from generation.candidate_profile import (
+    extract_candidate_profile,
+    save_candidate_profile,
+)
+
 from generation.resume_generator import (
     generate_resume,
     save_resume,
 )
+from generation.composition import compose_resume
 
 from rendering.latex_renderer import (
     ResumeHeader,
     render_latex,
     compile_pdf,
 )
+from rendering.page_fit import render_one_page
 
 
 OUTPUT_DIR = Path("output")
@@ -70,7 +77,7 @@ OUTPUT_DIR = Path("output")
 def run(
     model_name: str,
     jd_file: Path,
-    name: str,
+    name: str | None = None,
     email: str | None = None,
     phone: str | None = None,
     location: str | None = None,
@@ -82,18 +89,17 @@ def run(
     # 1. Load LLM
     # ---------------------------------------------------------
 
-    print("\n[1/9] Loading model")
+    print("\n[1/10] Loading model")
 
     llm = load(model_name)
 
     print(f"Model: {llm.name}")
 
-
     # ---------------------------------------------------------
     # 2. Parse raw corpus
     # ---------------------------------------------------------
 
-    print("\n[2/9] Parsing corpus")
+    print("\n[2/10] Parsing corpus")
 
     documents = parse_corpus()
 
@@ -103,12 +109,38 @@ def run(
         f"Parsed {len(documents)} document records"
     )
 
+    # ---------------------------------------------------------
+    # 3. Reconstruct candidate profile
+    # ---------------------------------------------------------
+
+    print(
+        "\n[3/10] Reconstructing candidate profile"
+    )
+
+    profile = extract_candidate_profile(
+        llm=llm,
+        documents=documents,
+    )
+
+    save_candidate_profile(
+        profile
+    )
+
+    print(
+        "Profile: "
+        f"{len(profile.experience)} experience, "
+        f"{len(profile.projects)} projects, "
+        f"{len(profile.education)} education, "
+        f"{len(profile.certifications)} certifications"
+    )
 
     # ---------------------------------------------------------
-    # 3. Chunk documents
+    # 4. Chunk documents
     # ---------------------------------------------------------
 
-    print("\n[3/9] Chunking documents")
+    print(
+        "\n[4/10] Chunking documents"
+    )
 
     loaded_documents = load_documents()
 
@@ -122,23 +154,25 @@ def run(
         f"Created {len(chunks)} chunks"
     )
 
-
     # ---------------------------------------------------------
-    # 4. Extract evidence
+    # 5. Extract evidence
     # ---------------------------------------------------------
 
-    print("\n[4/9] Extracting evidence")
+    print(
+        "\n[5/10] Extracting evidence"
+    )
 
     extract_corpus(
         llm=llm
     )
 
-
     # ---------------------------------------------------------
-    # 5. Build retrieval system
+    # 6. Build retrieval system
     # ---------------------------------------------------------
 
-    print("\n[5/9] Building retrieval system")
+    print(
+        "\n[6/10] Building retrieval system"
+    )
 
     evidence_cards = load_evidence()
 
@@ -171,12 +205,13 @@ def run(
         f"Indexed {len(evidence_cards)} evidence cards"
     )
 
-
     # ---------------------------------------------------------
-    # 6. Parse job description
+    # 7. Parse job description
     # ---------------------------------------------------------
 
-    print("\n[6/9] Analyzing job description")
+    print(
+        "\n[7/10] Analyzing job description"
+    )
 
     job_description = (
         jd_file.read_text(
@@ -198,12 +233,13 @@ def run(
         f"{len(analysis.requirements)}"
     )
 
-
     # ---------------------------------------------------------
-    # 7. Match evidence
+    # 8. Match evidence
     # ---------------------------------------------------------
 
-    print("\n[7/9] Matching evidence")
+    print(
+        "\n[8/10] Matching evidence"
+    )
 
     candidate_sets = (
         matcher.match_all(
@@ -220,18 +256,18 @@ def run(
     )
 
     for item in evidence_map.requirements:
-
         print(
             f"{item.match_strength.upper():7} "
             f"{item.requirement_text}"
         )
 
-
     # ---------------------------------------------------------
-    # 8. Generate resume
+    # 9. Generate structured resume
     # ---------------------------------------------------------
 
-    print("\n[8/9] Generating resume")
+    print(
+        "\n[9/10] Generating structured resume"
+    )
 
     resume = generate_resume(
         generator_llm=llm,
@@ -239,75 +275,53 @@ def run(
         analysis=analysis,
         evidence_map=evidence_map,
         evidence_lookup=evidence_lookup,
+        profile=profile,
     )
 
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    json_output = (
-        OUTPUT_DIR
-        / "tailored_resume.json"
-    )
-
-    save_resume(
+    # Compose enough verified material for the template before fitting the page.
+    resume, composition_warnings = compose_resume(
         resume,
-        json_output,
+        profile=profile,
+        analysis=analysis,
+        evidence_map=evidence_map,
+        evidence_lookup=evidence_lookup,
+        generator_llm=llm,
+        validator_llm=llm,
     )
 
-    print(
-        f"JSON: {json_output}"
-    )
-
-
     # ---------------------------------------------------------
-    # 9. Render LaTeX / PDF
+    # 10. Render verified one-page LaTeX / PDF
     # ---------------------------------------------------------
-
-    print("\n[9/9] Rendering resume")
-
+    print("\n[10/10] Composing and rendering one-page resume")
     header = ResumeHeader(
-        name=name,
-        email=email,
-        phone=phone,
-        location=location,
-        linkedin=linkedin,
-        github=github,
+        name=(name or profile.name or "Candidate"),
+        email=(email or profile.email),
+        phone=(phone or profile.phone),
+        location=(location or profile.location),
+        linkedin=(linkedin or profile.linkedin),
+        github=(github or profile.github),
     )
-
-    tex_file = render_latex(
-        resume=resume,
-        header=header,
-        output_file=(
-            OUTPUT_DIR
-            / "tailored_resume.tex"
-        ),
+    fitted_resume, layout_report = render_one_page(
+        resume, header, OUTPUT_DIR, paper="letter",
+        initial_warnings=composition_warnings,
     )
+    save_resume(fitted_resume, OUTPUT_DIR / "tailored_resume.json")
+    print(f"JSON: {OUTPUT_DIR / 'tailored_resume.json'}")
+    print(f"LaTeX: {OUTPUT_DIR / 'tailored_resume.tex'}")
+    print(f"PDF: {OUTPUT_DIR / 'tailored_resume.pdf'}")
+    print(f"Layout: {OUTPUT_DIR / 'layout_report.json'}")
+    print(f"Pages: {layout_report.page_count}; "
+          f"Experience bullets: {layout_report.experience_bullets}; "
+          f"Project bullets: {layout_report.project_bullets}")
+    for warning in layout_report.warnings:
+        print(f"  Layout warning: {warning}")
 
     print(
-        f"LaTeX: {tex_file}"
+        "\nResumeForge complete."
     )
-
-    pdf_file = compile_pdf(
-        tex_file
-    )
-
-    if pdf_file:
-        print(
-            f"PDF: {pdf_file}"
-        )
-    else:
-        print(
-            "PDF not compiled because "
-            "pdflatex is not installed."
-        )
-
-    print("\nResumeForge complete.")
 
 
 def main() -> None:
-
     parser = argparse.ArgumentParser(
         description=(
             "Generate an evidence-grounded "
@@ -328,7 +342,6 @@ def main() -> None:
 
     parser.add_argument(
         "--name",
-        required=True,
     )
 
     parser.add_argument(
